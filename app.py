@@ -157,7 +157,7 @@ if st.session_state.file_uploaded and st.session_state.pdf_pages:
                 for p in active_pages_for_sort
             ]
             
-            sorted_results = sort_items(sortable_items_list, key="page_sorter") 
+            sorted_results = sort_items(sortable_items_list, key="page_sorter", multi_containers=True) 
             
             id_to_page = {p['id']: p for p in st.session_state.pdf_pages}
             new_ordered_pages = []
