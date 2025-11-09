@@ -35,6 +35,9 @@ if 'source_pdf_path' not in st.session_state:
     st.session_state.source_pdf_path = None
 
 # --- DATEI UPLOAD ---
+# --- DATEI UPLOAD ---
+uploaded_file = st.file_uploader("PDF hier ablegen", type="pdf")
+
 if uploaded_file:
     pdf_bytes = uploaded_file.getvalue()
     
