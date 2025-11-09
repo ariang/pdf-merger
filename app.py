@@ -52,10 +52,13 @@ if uploaded_file:
     if uploaded_file.name != st.session_state.current_file_id:
         with st.spinner("PDF wird verarbeitet..."):
             try:
-                # --- Datei als Bytes lesen ---
+                # --- Datei als Bytes einmal lesen ---
                 pdf_bytes = uploaded_file.read()
 
-                # --- PdfReader mit Bytes ---
+                # --- Bytes in BytesIO speichern, damit mehrere Leser Zugriff haben ---
+                pdf_stream = io.BytesIO(pdf_bytes)
+
+                # --- PdfReader nur mit BytesIO ---
                 pdf_reader = PdfReader(io.BytesIO(pdf_bytes))
 
                 # --- Vorschau-Bilder generieren ---
