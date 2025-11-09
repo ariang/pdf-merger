@@ -1,7 +1,7 @@
 import streamlit as st
 from pypdf import PdfReader, PdfWriter
 from pdf2image import convert_from_bytes
-# KORREKTUR: Du hattest recht, es ist 'sort_items'
+# Die korrekte Funktion für das Sortieren ist 'sort_items'
 from streamlit_sortables import sort_items 
 from PIL import Image
 import io
@@ -51,7 +51,6 @@ if uploaded_file:
                 pdf_reader = PdfReader(uploaded_file)
                 
                 # 2. Vorschau-Bilder generieren (benötigt Poppler!)
-                # Wir nutzen eine niedrige DPI für schnellere Performance in der UI
                 images = convert_from_bytes(uploaded_file.getvalue(), dpi=100)
                 
                 # 3. State initialisieren
@@ -86,7 +85,7 @@ if st.session_state.file_uploaded and st.session_state.pdf_pages:
         
         # Grid-Layout erstellen (z.B. 4 Spalten)
         cols_per_row = 4
-        all_pages = st.session_state.pdf_pages # Wir zeigen alle, auch inaktive (ausgegraut)
+        all_pages = st.session_state.pdf_pages
         
         for i in range(0, len(all_pages), cols_per_row):
             cols = st.columns(cols_per_row)
@@ -94,18 +93,13 @@ if st.session_state.file_uploaded and st.session_state.pdf_pages:
                 if i + j < len(all_pages):
                     page_data = all_pages[i+j]
                     with cols[j]:
-                        # Container für die "Karte"
                         with st.container(border=True):
-                            # Überschrift
                             status_icon = "✅" if page_data['is_active'] else "❌"
                             st.write(f"**Seite {page_data['orig_index'] + 1}** {status_icon}")
                             
-                            # Bild rotieren für Vorschau
                             preview_img = page_data['thumb'].rotate(-page_data['rotation'], expand=True)
                             
-                            # Bild anzeigen (ausgegraut wenn inaktiv)
                             if not page_data['is_active']:
-                                # Bild aufhellen/ausgrauen
                                 preview_img = preview_img.point(lambda p: p * 0.5)
                             
                             st.image(preview_img, use_container_width=True)
@@ -119,7 +113,6 @@ if st.session_state.file_uploaded and st.session_state.pdf_pages:
                                 page_data['rotation'] = (page_data['rotation'] + 90) % 360
                                 st.rerun()
                             
-                            # Aktivieren/Deaktivieren Toggle Button
                             btn_label = "🗑️ Entfernen" if page_data['is_active'] else "Wiederherstellen"
                             btn_type = "secondary" if page_data['is_active'] else "primary"
                             if c3.button(btn_label, key=f"del_{page_data['orig_index']}", type=btn_type, help="Seite entfernen/wiederherstellen"):
@@ -131,44 +124,31 @@ if st.session_state.file_uploaded and st.session_state.pdf_pages:
         st.subheader("Reihenfolge ändern")
         st.info("Ziehen Sie die Elemente, um die Reihenfolge zu ändern. Änderungen werden automatisch übernommen. (Nur aktive Seiten werden hier angezeigt)")
         
-        # Wir erstellen eine vereinfachte Liste nur für das Sortier-Widget
-        # Wir zeigen nur aktive Seiten im Sorter an
         active_pages_for_sort = [p for p in st.session_state.pdf_pages if p['is_active']]
         
         sortable_items_list = [
-            # 'text' wird in der UI angezeigt, 'id' wird intern verwendet
             {'text': f"Seite {p['orig_index'] + 1} (Rotation: {p['rotation']}°)", 'id': p['id']}
             for p in active_pages_for_sort
         ]
         
-        # KORREKTUR: Die Funktion heißt 'sort_items'
-        # (Parameter 'multi_containers' ist hier nicht nötig)
+        # KORRIGIERTER AUFRUF: sort_items
         sorted_results = sort_items(sortable_items_list, key="page_sorter", multi_containers=True) 
         
-        # 1. Mapping von ID zu Page-Objekt erstellen
         id_to_page = {p['id']: p for p in st.session_state.pdf_pages}
-        
-        # 2. Die neue geordnete Liste erstellen
         new_ordered_pages = []
         
-        # Zuerst die sortierten aktiven Seiten hinzufügen
-        if sorted_results: # Nur wenn das Widget Ergebnisse liefert
+        if sorted_results:
             for item in sorted_results:
                 new_ordered_pages.append(id_to_page[item['id']])
-        else: # Fallback, falls das Widget leer ist (z.B. alle Seiten deaktiviert)
+        else:
             new_ordered_pages = active_pages_for_sort
 
-        # Dann die inaktiven Seiten hinten anhängen (damit sie nicht verloren gehen)
         for p in st.session_state.pdf_pages:
             if not p['is_active']:
                  new_ordered_pages.append(p)
                  
-        # Überprüfen, ob sich die Reihenfolge wirklich geändert hat, um Endlosschleifen zu vermeiden
         current_ids = [p['id'] for p in st.session_state.pdf_pages if p['is_active']]
-        if sorted_results:
-            new_sorted_ids = [item['id'] for item in sorted_results]
-        else:
-            new_sorted_ids = []
+        new_sorted_ids = [item['id'] for item in sorted_results] if sorted_results else []
         
         if current_ids != new_sorted_ids and sorted_results:
              st.session_state.pdf_pages = new_ordered_pages
@@ -185,7 +165,6 @@ if st.session_state.file_uploaded and st.session_state.pdf_pages:
         st.divider()
         st.subheader("Optionen")
         
-        # NEUE FUNKTION: Komprimierungs-Checkbox
         compress_pdf = st.checkbox(
             "PDF verlustfrei komprimieren", 
             value=True, 
@@ -199,27 +178,24 @@ if st.session_state.file_uploaded and st.session_state.pdf_pages:
                 st.error("Sie haben alle Seiten entfernt. Es gibt nichts zu generieren.")
             else:
                 with st.spinner("PDF wird erstellt..."):
-                    # 1. Original PDF neu laden (sauberer Start)
+                    
                     src_pdf = PdfReader(io.BytesIO(st.session_state.source_pdf_bytes))
                     writer = PdfWriter()
                     
-                    # 2. Durch unsere sortierte Liste iterieren und Seiten hinzufügen
                     for page_data in st.session_state.pdf_pages:
                         if page_data['is_active']:
-                            # Originalseite holen
                             original_page = src_pdf.pages[page_data['orig_index']]
                             
-                            # Drehung anwenden (falls nötig)
                             if page_data['rotation'] != 0:
                                 original_page.rotate(page_data['rotation'])
                             
-                            # NEUE FUNKTION: Komprimierung anwenden
-                            if compress_pdf:
-                                original_page.compress_content_streams()
-                            
+                            # KORRIGIERTE LOGIK: Seite zuerst hinzufügen, dann komprimieren
                             writer.add_page(original_page)
+                            
+                            if compress_pdf:
+                                # Komprimierung auf die Seite im Writer aufrufen
+                                writer.pages[-1].compress_content_streams() 
                     
-                    # 3. In BytesIO speichern für Download
                     output_pdf = io.BytesIO()
                     writer.write(output_pdf)
                     pdf_bytes = output_pdf.getvalue()
@@ -234,5 +210,4 @@ if st.session_state.file_uploaded and st.session_state.pdf_pages:
                     )
 
 else:
-    # Placeholder wenn nichts hochgeladen ist
     st.info("👆 Bitte laden Sie zuerst eine PDF-Datei hoch.")
