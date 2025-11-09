@@ -143,7 +143,7 @@ if st.session_state.file_uploaded and st.session_state.pdf_pages:
         
         # KORREKTUR: Die Funktion heißt 'sort_items'
         # (Parameter 'multi_containers' ist hier nicht nötig)
-        sorted_results = sort_items(sortable_items_list, key="page_sorter") 
+        sorted_results = sort_items(sortable_items_list, key="page_sorter", multi_containers=True) 
         
         # 1. Mapping von ID zu Page-Objekt erstellen
         id_to_page = {p['id']: p for p in st.session_state.pdf_pages}
