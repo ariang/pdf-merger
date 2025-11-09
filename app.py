@@ -1,168 +1,85 @@
 import streamlit as st
-from pypdf import PdfReader, PdfWriter
-from pdf2image import convert_from_path
-from pdf2image import convert_from_bytes
-from streamlit_sortables import sort_items
-from PIL import Image
-import io
+from PyPDF2 import PdfMerger, PdfReader, PdfWriter
 import tempfile
-import os
 
-# --- HELPER ---
-def bytes_to_human_readable(size_bytes):
-    if size_bytes == 0:
-        return "0 Bytes"
-    size_name = ("Bytes", "KB", "MB", "GB", "TB")
-    i = 0
-    while size_bytes >= 1024 and i < len(size_name) - 1:
-        size_bytes /= 1024
-        i += 1
-    return f"{size_bytes:.2f} {size_name[i]}"
+st.set_page_config(page_title="PDF Tool", page_icon="📎")
+st.title("📎 PDF Merger & Splitter")
 
-st.set_page_config(page_title="PDF Pro Editor", page_icon="📎", layout="wide")
+mode = st.radio("Funktion wählen", ["PDFs zusammenführen", "PDF aufteilen"])
 
-st.title("📎 PDF Pro Editor")
-st.markdown("Laden Sie ein PDF hoch, um Seiten visuell zu bearbeiten, zu drehen, zu entfernen oder zu komprimieren.")
+# --- ZUSAMMENFÜHREN ---
+if mode == "PDFs zusammenführen":
+    uploaded_files = st.file_uploader(
+        "Wähle mehrere PDFs aus", accept_multiple_files=True, type="pdf"
+    )
 
-# --- STATE ---
-if 'pdf_pages' not in st.session_state:
-    st.session_state.pdf_pages = []
-if 'current_file_id' not in st.session_state:
-    st.session_state.current_file_id = None
-if 'file_uploaded' not in st.session_state:
-    st.session_state.file_uploaded = False
-if 'source_pdf_path' not in st.session_state:
-    st.session_state.source_pdf_path = None
+    if uploaded_files:
+        st.subheader("Reihenfolge der Dateien")
+        filenames = [f.name for f in uploaded_files]
+        order = st.multiselect(
+            "Reihenfolge festlegen",
+            options=filenames,
+            default=filenames,
+            help="Wähle oder ordne die PDFs in der gewünschten Reihenfolge an.",
+        )
 
-# --- DATEI UPLOAD ---
-# --- DATEI UPLOAD ---
-uploaded_file = st.file_uploader("PDF hier ablegen", type="pdf")
-
-if uploaded_file:
-    pdf_bytes = uploaded_file.getvalue()
-    
-    if uploaded_file.file_id != st.session_state.current_file_id:
-        with st.spinner('PDF wird auf Integrität geprüft...'):
-            try:
-                # *1. Integritätsprüfung mit pypdf*
-                # (Dies sollte den XREF-Fehler abfangen, falls er dort auftritt)
-                src_pdf_reader = PdfReader(io.BytesIO(pdf_bytes))
-                num_pages = len(src_pdf_reader.pages)
-                
-                # *2. Vorschau-Bilder generieren (Poppler)*
-                with st.spinner('Vorschaubilder werden generiert...'):
-                    # Sollte nur laufen, wenn das PDF intakt ist
-                    images = convert_from_bytes(pdf_bytes, dpi=100, poppler_path='poppler-24.02.0\Library\bin')
-                
-                # *3. State initialisieren (Restlicher Code)*
-                st.session_state.pdf_pages = []
-                for i, img in enumerate(images):
-                    st.session_state.pdf_pages.append({
-                        "orig_index": i,      
-                        "thumb": img,
-                        "rotation": 0,
-                        "is_active": True,
-                        "id": f"page_{i}"
-                    })
-                
-                st.session_state.source_pdf_bytes = pdf_bytes
-                st.session_state.current_file_id = uploaded_file.file_id
-                st.session_state.file_uploaded = True
-                st.session_state.original_size = len(st.session_state.source_pdf_bytes)
-                st.rerun()
-                
-            except Exception as e:
-                # Unterscheidung zwischen Poppler-Fehler und PDF-Syntaxfehler
-                if "trailer dictionary" in str(e) or "xref table" in str(e):
-                    st.error(f"❌ **Fehler:** Die PDF-Datei ist möglicherweise beschädigt oder nicht standardkonform. Bitte versuchen Sie, die Datei neu zu speichern oder eine andere Datei zu verwenden. Details: {e}")
-                else:
-                    st.error(f"⚠️ **Poppler-Fehler:** Fehler beim Generieren der Vorschaubilder. Ist 'Poppler' korrekt installiert und im PATH? Details: {e}")
-                
-                st.session_state.file_uploaded = False
-                st.session_state.current_file_id = None
-
-# --- HAUPTANSICHT ---
-if st.session_state.file_uploaded and st.session_state.pdf_pages:
-    tab_edit, tab_sort, tab_export = st.tabs(["🛠️ Bearbeiten", "🔃 Reihenfolge", "📥 Exportieren"])
-
-    # --- TAB 1: Bearbeiten ---
-    with tab_edit:
-        st.subheader("Seiten bearbeiten")
-        cols_per_row = 4
-        all_pages = st.session_state.pdf_pages
-        for i in range(0, len(all_pages), cols_per_row):
-            cols = st.columns(cols_per_row)
-            for j in range(cols_per_row):
-                if i + j < len(all_pages):
-                    page_data = all_pages[i + j]
-                    with cols[j]:
-                        status_icon = "✅" if page_data['is_active'] else "❌"
-                        st.write(f"**Seite {page_data['orig_index'] + 1}** {status_icon}")
-                        preview_img = page_data['thumb'].rotate(-page_data['rotation'], expand=True)
-                        if not page_data['is_active']:
-                            preview_img = preview_img.point(lambda p: p * 0.5)
-                        st.image(preview_img, use_container_width=True)
-
-                        c1, c2, c3 = st.columns(3)
-                        if c1.button("↺", key=f"rotL_{page_data['orig_index']}"):
-                            page_data['rotation'] = (page_data['rotation'] - 90) % 360
-                            st.experimental_rerun()
-                        if c2.button("↻", key=f"rotR_{page_data['orig_index']}"):
-                            page_data['rotation'] = (page_data['rotation'] + 90) % 360
-                            st.experimental_rerun()
-                        btn_label = "🗑️ Entfernen" if page_data['is_active'] else "Wiederherstellen"
-                        if c3.button(btn_label, key=f"del_{page_data['orig_index']}"):
-                            page_data['is_active'] = not page_data['is_active']
-                            st.experimental_rerun()
-
-    # --- TAB 2: Sortieren ---
-    with tab_sort:
-        st.subheader("Reihenfolge ändern")
-        active_pages = [p for p in st.session_state.pdf_pages if p['is_active']]
-        if not active_pages:
-            st.warning("Keine aktiven Seiten zum Sortieren vorhanden.")
-        else:
-            items = [{'text': f"Seite {p['orig_index']+1} (Rotation: {p['rotation']}°)", 'id': p['id']} for p in active_pages]
-            sorted_results = sort_items(items, key="page_sorter", multi_containers=True)
-            if sorted_results:
-                id_to_page = {p['id']: p for p in st.session_state.pdf_pages}
-                new_order = [id_to_page[item['id']] for item in sorted_results]
-                new_order += [p for p in st.session_state.pdf_pages if not p['is_active']]
-                st.session_state.pdf_pages = new_order
-                st.experimental_rerun()
-
-    # --- TAB 3: Export ---
-    with tab_export:
-        st.subheader("PDF exportieren")
-        active_count = sum(1 for p in st.session_state.pdf_pages if p['is_active'])
-        st.write(f"**Seiten im neuen PDF:** {active_count}")
-        st.markdown(f"**Originalgröße:** <span class='file-size'>{bytes_to_human_readable(st.session_state.original_size)}</span>", unsafe_allow_html=True)
-
-        compression_level = st.slider("Verlustfreie Komprimierung (0-9)", 0, 9, 6)
-        image_compression = st.checkbox("Verlustbehaftete Komprimierung (Bilder)", value=False)
-
-        if st.button("🚀 PDF Generieren & Herunterladen"):
-            if active_count == 0:
-                st.error("Keine Seiten aktiv.")
+        if st.button("Zusammenführen"):
+            if not order:
+                st.warning("Bitte Reihenfolge auswählen.")
             else:
-                with st.spinner("PDF wird erstellt..."):
-                    src_pdf = PdfReader(st.session_state.source_pdf_path)
-                    writer = PdfWriter()
-                    for page_data in st.session_state.pdf_pages:
-                        if page_data['is_active']:
-                            p = src_pdf.pages[page_data['orig_index']]
-                            if page_data['rotation']:
-                                p.rotate(page_data['rotation'])
-                            writer.add_page(p)
-                            if compression_level > 0:
-                                writer.pages[-1].compress_content_streams(level=compression_level)
-                            if image_compression:
-                                writer.pages[-1].compress_images()
-                    output = io.BytesIO()
-                    writer.write(output)
-                    pdf_bytes = output.getvalue()
-                    st.success("PDF erstellt!")
-                    st.markdown(f"**Neue Größe:** <span class='file-size'>{bytes_to_human_readable(len(pdf_bytes))}</span>", unsafe_allow_html=True)
-                    st.download_button("📥 Herunterladen", pdf_bytes, "bearbeitet_pro.pdf", "application/pdf")
+                merger = PdfMerger()
+                name_to_file = {f.name: f for f in uploaded_files}
+                for name in order:
+                    merger.append(name_to_file[name])
+
+                with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp:
+                    merger.write(tmp.name)
+                    merger.close()
+                    with open(tmp.name, "rb") as merged_pdf:
+                        st.download_button(
+                            "📥 Zusammengeführte PDF herunterladen",
+                            merged_pdf,
+                            "merged.pdf",
+                        )
+
+# --- AUFTEILEN ---
 else:
-    st.info("👆 Bitte laden Sie zuerst eine PDF-Datei hoch.")
+    uploaded_file = st.file_uploader("Wähle eine PDF-Datei", type="pdf")
+
+    if uploaded_file:
+        reader = PdfReader(uploaded_file)
+        total_pages = len(reader.pages)
+        st.info(f"Diese PDF hat {total_pages} Seiten.")
+
+        page_selection = st.text_input(
+            "Welche Seiten extrahieren?",
+            placeholder="z. B. 1,3-5,7",
+            help="Kommagetrennt: einzelne Seiten (1,3) oder Bereiche (3-5).",
+        )
+
+        if st.button("Aufteilen"):
+            if not page_selection:
+                st.warning("Bitte Seiten angeben.")
+            else:
+                pages_to_extract = []
+                for part in page_selection.split(","):
+                    if "-" in part:
+                        start, end = map(int, part.split("-"))
+                        pages_to_extract.extend(range(start, end + 1))
+                    else:
+                        pages_to_extract.append(int(part))
+                pages_to_extract = [p - 1 for p in pages_to_extract if 0 < p <= total_pages]
+
+                writer = PdfWriter()
+                for p in pages_to_extract:
+                    writer.add_page(reader.pages[p])
+
+                with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp:
+                    writer.write(tmp)
+                    writer.close()
+                    with open(tmp.name, "rb") as split_pdf:
+                        st.download_button(
+                            "📥 Extrahierte Seiten herunterladen",
+                            split_pdf,
+                            "extracted_pages.pdf",
+                        )
