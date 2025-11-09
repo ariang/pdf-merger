@@ -35,29 +35,23 @@ if 'source_pdf_path' not in st.session_state:
     st.session_state.source_pdf_path = None
 
 # --- DATEI UPLOAD ---
-uploaded_file = st.file_uploader("PDF hier ablegen", type="pdf")
-
 if uploaded_file:
-    # NEU: Lese den Inhalt nur einmal in eine lokale Variable
     pdf_bytes = uploaded_file.getvalue()
     
     if uploaded_file.file_id != st.session_state.current_file_id:
-        with st.spinner('PDF wird verarbeitet... Bitte warten.'):
+        with st.spinner('PDF wird auf Integrität geprüft...'):
             try:
-                # 1. PDF-Inhalt einmalig speichern
-                st.session_state.source_pdf_bytes = pdf_bytes
+                # *1. Integritätsprüfung mit pypdf*
+                # (Dies sollte den XREF-Fehler abfangen, falls er dort auftritt)
+                src_pdf_reader = PdfReader(io.BytesIO(pdf_bytes))
+                num_pages = len(src_pdf_reader.pages)
                 
-                # 2. PDF lesen für spätere Extraktion (verwende BytesIO für pypdf)
-                # ACHTUNG: Dies ist technisch gesehen nicht nötig, da st.session_state.source_pdf_bytes 
-                # später im Export-Tab gelesen wird. Lassen wir es für die Struktur.
-                # WICHTIGER ist die Konvertierung:
+                # *2. Vorschau-Bilder generieren (Poppler)*
+                with st.spinner('Vorschaubilder werden generiert...'):
+                    # Sollte nur laufen, wenn das PDF intakt ist
+                    images = convert_from_bytes(pdf_bytes, dpi=100)
                 
-                # 3. Vorschau-Bilder generieren (verwende die lokale Variable)
-                # Der Aufruf convert_from_bytes liest den Stream, aber da wir Bytes übergeben, 
-                # ist es eine Kopie und der Fehler sollte behoben sein.
-                images = convert_from_bytes(pdf_bytes, dpi=100)
-                
-                # 4. State initialisieren
+                # *3. State initialisieren (Restlicher Code)*
                 st.session_state.pdf_pages = []
                 for i, img in enumerate(images):
                     st.session_state.pdf_pages.append({
@@ -68,17 +62,21 @@ if uploaded_file:
                         "id": f"page_{i}"
                     })
                 
+                st.session_state.source_pdf_bytes = pdf_bytes
                 st.session_state.current_file_id = uploaded_file.file_id
                 st.session_state.file_uploaded = True
-                
-                # Speichern der Originalgröße
                 st.session_state.original_size = len(st.session_state.source_pdf_bytes)
                 st.rerun()
+                
             except Exception as e:
-                # ... (Fehlerbehandlung beibehalten)
-                st.error(f"Fehler beim Verarbeiten der PDF. Ist 'Poppler' installiert?\nDetails: {e}")
+                # Unterscheidung zwischen Poppler-Fehler und PDF-Syntaxfehler
+                if "trailer dictionary" in str(e) or "xref table" in str(e):
+                    st.error(f"❌ **Fehler:** Die PDF-Datei ist möglicherweise beschädigt oder nicht standardkonform. Bitte versuchen Sie, die Datei neu zu speichern oder eine andere Datei zu verwenden. Details: {e}")
+                else:
+                    st.error(f"⚠️ **Poppler-Fehler:** Fehler beim Generieren der Vorschaubilder. Ist 'Poppler' korrekt installiert und im PATH? Details: {e}")
+                
                 st.session_state.file_uploaded = False
-                st.session_state.current_file_id = None # Wichtig bei Fehler
+                st.session_state.current_file_id = None
 
 # --- HAUPTANSICHT ---
 if st.session_state.file_uploaded and st.session_state.pdf_pages:
