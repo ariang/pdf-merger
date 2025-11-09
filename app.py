@@ -1,5 +1,4 @@
 import streamlit as st
-# HINWEIS: 'pypdf' wird statt 'PyPDF2' empfohlen
 from pypdf import PdfReader, PdfWriter
 from pdf2image import convert_from_bytes
 # KORREKTUR: Die Funktion heißt 'sortable_items'
@@ -87,13 +86,13 @@ if st.session_state.file_uploaded and st.session_state.pdf_pages:
         
         # Grid-Layout erstellen (z.B. 4 Spalten)
         cols_per_row = 4
-        active_pages = st.session_state.pdf_pages # Wir zeigen alle, auch inaktive (ausgegraut)
+        all_pages = st.session_state.pdf_pages # Wir zeigen alle, auch inaktive (ausgegraut)
         
-        for i in range(0, len(active_pages), cols_per_row):
+        for i in range(0, len(all_pages), cols_per_row):
             cols = st.columns(cols_per_row)
             for j in range(cols_per_row):
-                if i + j < len(active_pages):
-                    page_data = active_pages[i+j]
+                if i + j < len(all_pages):
+                    page_data = all_pages[i+j]
                     with cols[j]:
                         # Container für die "Karte"
                         with st.container(border=True):
@@ -121,7 +120,7 @@ if st.session_state.file_uploaded and st.session_state.pdf_pages:
                                 st.rerun()
                             
                             # Aktivieren/Deaktivieren Toggle Button
-                            btn_label = "🗑️" if page_data['is_active'] else "Wiederherstellen"
+                            btn_label = "🗑️ Entfernen" if page_data['is_active'] else "Wiederherstellen"
                             btn_type = "secondary" if page_data['is_active'] else "primary"
                             if c3.button(btn_label, key=f"del_{page_data['orig_index']}", type=btn_type, help="Seite entfernen/wiederherstellen"):
                                 page_data['is_active'] = not page_data['is_active']
@@ -130,7 +129,7 @@ if st.session_state.file_uploaded and st.session_state.pdf_pages:
     # --- TAB 2: SORTIEREN (DRAG & DROP) ---
     with tab_sort:
         st.subheader("Reihenfolge ändern")
-        st.info("Ziehen Sie die Elemente, um die Reihenfolge zu ändern. Änderungen werden automatisch übernommen.")
+        st.info("Ziehen Sie die Elemente, um die Reihenfolge zu ändern. Änderungen werden automatisch übernommen. (Nur aktive Seiten werden hier angezeigt)")
         
         # Wir erstellen eine vereinfachte Liste nur für das Sortier-Widget
         # Wir zeigen nur aktive Seiten im Sorter an
@@ -177,36 +176,39 @@ if st.session_state.file_uploaded and st.session_state.pdf_pages:
         st.write(f"Ihr neues PDF wird **{active_count}** Seiten enthalten.")
         
         if st.button("🚀 PDF Generieren & Herunterladen", type="primary", use_container_width=True):
-            with st.spinner("PDF wird erstellt..."):
-                # 1. Original PDF neu laden (sauberer Start)
-                src_pdf = PdfReader(io.BytesIO(st.session_state.source_pdf_bytes))
-                writer = PdfWriter()
-                
-                # 2. Durch unsere sortierte Liste iterieren und Seiten hinzufügen
-                for page_data in st.session_state.pdf_pages:
-                    if page_data['is_active']:
-                        # Originalseite holen
-                        original_page = src_pdf.pages[page_data['orig_index']]
-                        
-                        # Drehung anwenden (falls nötig)
-                        if page_data['rotation'] != 0:
-                            original_page.rotate(page_data['rotation'])
-                        
-                        writer.add_page(original_page)
-                
-                # 3. In BytesIO speichern für Download
-                output_pdf = io.BytesIO()
-                writer.write(output_pdf)
-                pdf_bytes = output_pdf.getvalue()
-                
-                st.success("PDF erfolgreich erstellt!")
-                st.download_button(
-                    label="📥 Fertiges PDF herunterladen",
-                    data=pdf_bytes,
-                    file_name="bearbeitet_pro.pdf",
-                    mime="application/pdf",
-                    use_container_width=True
-                )
+            if active_count == 0:
+                st.error("Sie haben alle Seiten entfernt. Es gibt nichts zu generieren.")
+            else:
+                with st.spinner("PDF wird erstellt..."):
+                    # 1. Original PDF neu laden (sauberer Start)
+                    src_pdf = PdfReader(io.BytesIO(st.session_state.source_pdf_bytes))
+                    writer = PdfWriter()
+                    
+                    # 2. Durch unsere sortierte Liste iterieren und Seiten hinzufügen
+                    for page_data in st.session_state.pdf_pages:
+                        if page_data['is_active']:
+                            # Originalseite holen
+                            original_page = src_pdf.pages[page_data['orig_index']]
+                            
+                            # Drehung anwenden (falls nötig)
+                            if page_data['rotation'] != 0:
+                                original_page.rotate(page_data['rotation'])
+                            
+                            writer.add_page(original_page)
+                    
+                    # 3. In BytesIO speichern für Download
+                    output_pdf = io.BytesIO()
+                    writer.write(output_pdf)
+                    pdf_bytes = output_pdf.getvalue()
+                    
+                    st.success("PDF erfolgreich erstellt!")
+                    st.download_button(
+                        label="📥 Fertiges PDF herunterladen",
+                        data=pdf_bytes,
+                        file_name="bearbeitet_pro.pdf",
+                        mime="application/pdf",
+                        use_container_width=True
+                    )
 
 else:
     # Placeholder wenn nichts hochgeladen ist
