@@ -52,9 +52,16 @@ if uploaded_file:
     if uploaded_file.name != st.session_state.current_file_id:
         with st.spinner("PDF wird verarbeitet..."):
             try:
+                # --- Datei als Bytes lesen ---
                 pdf_bytes = uploaded_file.read()
+
+                # --- PdfReader mit Bytes ---
+                pdf_reader = PdfReader(io.BytesIO(pdf_bytes))
+
+                # --- Vorschau-Bilder generieren ---
                 images = convert_from_bytes(pdf_bytes, dpi=100)
                 
+                # --- State initialisieren ---
                 st.session_state.pdf_pages = []
                 for i, img in enumerate(images):
                     st.session_state.pdf_pages.append({
@@ -64,14 +71,17 @@ if uploaded_file:
                         "is_active": True,
                         "id": f"page_{i}"
                     })
+                
                 st.session_state.source_pdf_bytes = pdf_bytes
                 st.session_state.current_file_id = uploaded_file.name
                 st.session_state.file_uploaded = True
                 st.session_state.original_size = len(pdf_bytes)
+                
                 st.experimental_rerun()
             except Exception as e:
-                st.error(f"Fehler beim Verarbeiten der PDF. Ist Poppler installiert?\nDetails: {e}")
+                st.error(f"Fehler beim Verarbeiten der PDF.\nDetails: {e}")
                 st.session_state.file_uploaded = False
+
 
 # --- HAUPTANSICHT ---
 if st.session_state.file_uploaded and st.session_state.pdf_pages:
