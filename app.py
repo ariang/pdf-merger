@@ -4,7 +4,6 @@ from io import BytesIO
 import pikepdf
 from pdf2image import convert_from_bytes
 from PIL import Image
-
 st.set_page_config(page_title="PDF-Toolkit", layout="wide")
 
 def get_pdf_size(pdf_bytes):
@@ -31,44 +30,49 @@ st.title("PDF-Toolkit")
 uploaded_files = st.file_uploader("PDFs hochladen", type="pdf", accept_multiple_files=True)
 
 if uploaded_files:
-    pdfs = []
-    for f in uploaded_files:
-        pdf_bytes = f.read()
-        try:
-            reader = PdfReader(BytesIO(pdf_bytes))
-            pdfs.append({'name': f.name, 'bytes': pdf_bytes, 'reader': reader})
-        except Exception:
-            st.error(f"Die PDF '{f.name}' konnte nicht gelesen werden.")
+    if 'pdfs' not in st.session_state:
+        st.session_state.pdfs = []
+        for f in uploaded_files:
+            pdf_bytes = f.read()
+            try:
+                reader = PdfReader(BytesIO(pdf_bytes))
+                page_order = list(range(len(reader.pages)))
+                st.session_state.pdfs.append({'name': f.name, 'bytes': pdf_bytes, 'reader': reader, 'order': page_order})
+            except Exception:
+                st.error(f"Die PDF '{f.name}' konnte nicht gelesen werden.")
 
-    if pdfs:
-        # Seitenübersicht
-        st.subheader("Seitenübersicht und Reihenfolge")
-        for pdf_index, pdf in enumerate(pdfs):
-            st.markdown(f"**{pdf['name']}**")
-            images = pdf_to_images(pdf['bytes'])
-            page_order = list(range(len(images)))
-            for idx, img in enumerate(images):
-                st.image(img, width=150, caption=f"Seite {idx+1}")
-                move_up = st.button(f"⬆ Seite {idx+1}", key=f"up_{pdf_index}_{idx}")
-                move_down = st.button(f"⬇ Seite {idx+1}", key=f"down_{pdf_index}_{idx}")
-                if move_up and idx > 0:
-                    page_order[idx], page_order[idx-1] = page_order[idx-1], page_order[idx]
-                if move_down and idx < len(images)-1:
-                    page_order[idx], page_order[idx+1] = page_order[idx+1], page_order[idx]
-            pdf['order'] = page_order
+    pdfs = st.session_state.pdfs
 
-        # Zusammenführen
-        st.subheader("PDF zusammenführen")
-        if st.button("Alle PDFs zusammenführen"):
-            writer = PdfWriter()
-            for pdf in pdfs:
-                for idx in pdf.get('order', range(len(pdf['reader'].pages))):
-                    writer.add_page(pdf['reader'].pages[idx])
-            out_bytes = BytesIO()
-            writer.write(out_bytes)
-            st.success("PDFs zusammengeführt!")
-            st.download_button("Download Zusammengeführt", out_bytes.getvalue(), file_name="merged.pdf")
+    # Seitenübersicht & Reihenfolge ändern
+    st.subheader("Seitenübersicht und Reihenfolge")
+    for pdf_index, pdf in enumerate(pdfs):
+        st.markdown(f"**{pdf['name']}**")
+        images = pdf_to_images(pdf['bytes'])
+        for idx, page_idx in enumerate(pdf['order']):
+            img = images[page_idx]
+            cols = st.columns([1,1,6])
+            with cols[0]:
+                if st.button("⬆", key=f"up_{pdf_index}_{idx}"):
+                    if idx > 0:
+                        pdf['order'][idx], pdf['order'][idx-1] = pdf['order'][idx-1], pdf['order'][idx]
+            with cols[1]:
+                if st.button("⬇", key=f"down_{pdf_index}_{idx}"):
+                    if idx < len(pdf['order'])-1:
+                        pdf['order'][idx], pdf['order'][idx+1] = pdf['order'][idx+1], pdf['order'][idx]
+            with cols[2]:
+                st.image(img, width=150, caption=f"Seite {page_idx+1}")
 
+    # Zusammenführen
+    st.subheader("PDF zusammenführen")
+    if st.button("Alle PDFs zusammenführen"):
+        writer = PdfWriter()
+        for pdf in pdfs:
+            for idx in pdf['order']:
+                writer.add_page(pdf['reader'].pages[idx])
+        out_bytes = BytesIO()
+        writer.write(out_bytes)
+        st.success("PDFs zusammengeführt!")
+        st.download_button("Download Zusammengeführt", out_bytes.getvalue(), file_name="merged.pdf")
         # PDF teilen
         st.subheader("PDF teilen")
         split_pdf_index = st.selectbox("PDF wählen zum Teilen", [p['name'] for p in pdfs])
