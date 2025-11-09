@@ -1,7 +1,9 @@
 import streamlit as st
+# HINWEIS: 'pypdf' wird statt 'PyPDF2' empfohlen
 from pypdf import PdfReader, PdfWriter
 from pdf2image import convert_from_bytes
-from streamlit_sortables import sortables
+# KORREKTUR: Die Funktion heißt 'sortable_items'
+from streamlit_sortables import sortable_items 
 from PIL import Image
 import io
 
@@ -131,20 +133,17 @@ if st.session_state.file_uploaded and st.session_state.pdf_pages:
         st.info("Ziehen Sie die Elemente, um die Reihenfolge zu ändern. Änderungen werden automatisch übernommen.")
         
         # Wir erstellen eine vereinfachte Liste nur für das Sortier-Widget
-        # Wir zeigen nur aktive Seiten im Sorter an, um Verwirrung zu vermeiden, 
-        # oder wir zeigen alle und markieren sie. Zeigen wir nur aktive:
+        # Wir zeigen nur aktive Seiten im Sorter an
         active_pages_for_sort = [p for p in st.session_state.pdf_pages if p['is_active']]
         
-        sortable_items = [
-            {'text': f"Seite {p['orig_index'] + 1} (Rot: {p['rotation']}°)", 'id': p['id']}
+        sortable_items_list = [
+            # 'text' wird in der UI angezeigt, 'id' wird intern verwendet
+            {'text': f"Seite {p['orig_index'] + 1} (Rotation: {p['rotation']}°)", 'id': p['id']}
             for p in active_pages_for_sort
         ]
         
-        # Das Sortable Widget
-        sorted_results = sortables(sortable_items, key="page_sorter")
-        
-        # Wenn sortiert wurde, müssen wir unsere Hauptliste (st.session_state.pdf_pages) aktualisieren
-        # Das ist tricky: Wir müssen die neue Reihenfolge auf die Hauptliste anwenden.
+        # KORREKTUR: Die Funktion heißt 'sortable_items'
+        sorted_results = sortable_items(sortable_items_list, key="page_sorter")
         
         # 1. Mapping von ID zu Page-Objekt erstellen
         id_to_page = {p['id']: p for p in st.session_state.pdf_pages}
@@ -168,7 +167,6 @@ if st.session_state.file_uploaded and st.session_state.pdf_pages:
         if current_ids != new_sorted_ids and sorted_results:
              st.session_state.pdf_pages = new_ordered_pages
              st.toast("Reihenfolge aktualisiert!", icon="✅")
-             # Rerun ist hier oft nötig, damit die Grid-View auch sofort stimmt
              st.rerun()
 
     # --- TAB 3: EXPORT ---
@@ -192,9 +190,6 @@ if st.session_state.file_uploaded and st.session_state.pdf_pages:
                         
                         # Drehung anwenden (falls nötig)
                         if page_data['rotation'] != 0:
-                            # pypdf rotation ist im Uhrzeigersinn. 
-                            # Unsere UI zeigt math. positiv (gegen UZS) wenn wir negativ rotieren?
-                            # Vereinfachung: Wir nutzen einfach rotate_clockwise
                             original_page.rotate(page_data['rotation'])
                         
                         writer.add_page(original_page)
