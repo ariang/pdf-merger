@@ -52,18 +52,19 @@ if uploaded_file:
     if uploaded_file.name != st.session_state.current_file_id:
         with st.spinner("PDF wird verarbeitet..."):
             try:
-                # --- Datei als Bytes einmal lesen ---
+                # --- Bytes einmal lesen ---
                 pdf_bytes = uploaded_file.read()
 
-                # --- Bytes in BytesIO speichern, damit mehrere Leser Zugriff haben ---
-                pdf_stream = io.BytesIO(pdf_bytes)
+                # --- Kopien für separate Bibliotheken ---
+                pdf_bytes_for_reader = io.BytesIO(pdf_bytes)
+                pdf_bytes_for_images = io.BytesIO(pdf_bytes)
 
-                # --- PdfReader nur mit BytesIO ---
-                pdf_reader = PdfReader(io.BytesIO(pdf_bytes))
+                # --- PdfReader ---
+                pdf_reader = PdfReader(pdf_bytes_for_reader, strict=False)
 
                 # --- Vorschau-Bilder generieren ---
-                images = convert_from_bytes(pdf_bytes, dpi=100)
-                
+                images = convert_from_bytes(pdf_bytes_for_images.read(), dpi=100)
+
                 # --- State initialisieren ---
                 st.session_state.pdf_pages = []
                 for i, img in enumerate(images):
@@ -74,16 +75,17 @@ if uploaded_file:
                         "is_active": True,
                         "id": f"page_{i}"
                     })
-                
+
                 st.session_state.source_pdf_bytes = pdf_bytes
                 st.session_state.current_file_id = uploaded_file.name
                 st.session_state.file_uploaded = True
                 st.session_state.original_size = len(pdf_bytes)
-                
+
                 st.experimental_rerun()
             except Exception as e:
                 st.error(f"Fehler beim Verarbeiten der PDF.\nDetails: {e}")
                 st.session_state.file_uploaded = False
+
 
 
 # --- HAUPTANSICHT ---
