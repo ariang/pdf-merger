@@ -197,4 +197,50 @@ if st.session_state.file_uploaded and st.session_state.pdf_pages:
         compression_note = st.checkbox("Versuche einfache Bild-Kompression (nur bei eingebetteten Bildern wirksam)", value=False)
         st.divider()
 
-        if s
+        if st.button("🚀 PDF Generieren & Herunterladen"):
+            if active_count == 0:
+                st.error("Keine aktive Seite zum Exportieren.")
+            else:
+                with st.spinner("PDF wird erstellt..."):
+                    try:
+                        src_pdf = PdfReader(io.BytesIO(st.session_state.source_pdf_bytes), strict=False)
+                        writer = PdfWriter()
+                        for p in st.session_state.pdf_pages:
+                            if not p['is_active']:
+                                continue
+                            page_obj = src_pdf.pages[p['orig_index']]
+                            # Rotation anwenden (pypdf)
+                            rot = p.get('rotation', 0) % 360
+                            if rot != 0:
+                                # rotate_clockwise ist in pypdf verfügbar
+                                try:
+                                    page_obj.rotate_clockwise(rot)
+                                except Exception:
+                                    # fallback: rotate in 90° steps with counterclockwise if needed
+                                    try:
+                                        page_obj.rotate(rot)
+                                    except Exception:
+                                        pass
+                            writer.add_page(page_obj)
+
+                        out = io.BytesIO()
+                        writer.write(out)
+                        pdf_bytes_new = out.getvalue()
+                        st.success("PDF erfolgreich erstellt.")
+                        st.markdown(f"**Neue Größe:** <span class='file-size'>{bytes_to_human_readable(len(pdf_bytes_new))}</span>", unsafe_allow_html=True)
+                        st.download_button("📥 Fertiges PDF herunterladen", data=pdf_bytes_new, file_name="bearbeitet_pro.pdf", mime="application/pdf", use_container_width=True)
+
+                        # Vorschau der ersten Seite (falls möglich)
+                        try:
+                            preview_imgs = convert_from_bytes(pdf_bytes_new, dpi=100, first_page=1, last_page=1)
+                            if preview_imgs:
+                                st.image(preview_imgs[0], caption="Vorschau (erste Seite)", width=400)
+                        except Exception:
+                            # kein Preview möglich, kein Problem
+                            pass
+
+                    except Exception as e_export:
+                        st.error(f"Fehler beim Erstellen des PDFs: {e_export}")
+
+else:
+    st.info("👆 Bitte laden Sie zuerst eine PDF-Datei hoch.")
