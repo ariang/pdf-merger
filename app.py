@@ -40,10 +40,12 @@ def save_temp_file(pdf_bytes, filename="temp.pdf"):
 st.title("PDF-Toolkit")
 uploaded_files = st.file_uploader("PDFs hochladen", type="pdf", accept_multiple_files=True)
 
-if uploaded_files:
-    pdfs = []
-    for f in uploaded_files:
-        pdfs.append({'name': f.name, 'bytes': f.read(), 'reader': PdfReader(f)})
+pdf_bytes = f.read()
+pdfs.append({
+    'name': f.name,
+    'bytes': pdf_bytes,
+    'reader': PdfReader(BytesIO(pdf_bytes))  # aus Bytes erstellen, nicht f
+})
     
     # --- Seiten-Vorschau & Reihenfolge ändern ---
     st.subheader("Seitenübersicht und Reihenfolge")
