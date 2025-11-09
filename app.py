@@ -1,6 +1,6 @@
 import streamlit as st
 from PyPDF2 import PdfMerger, PdfReader, PdfWriter
-import tempfile
+import io
 
 st.set_page_config(page_title="PDF Tool", page_icon="📎")
 st.title("📎 PDF Merger & Splitter")
@@ -30,56 +30,85 @@ if mode == "PDFs zusammenführen":
                 merger = PdfMerger()
                 name_to_file = {f.name: f for f in uploaded_files}
                 for name in order:
+                    # Streamlit uploaded file is a file-like object; PdfMerger akzeptiert das direkt
                     merger.append(name_to_file[name])
 
-                with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp:
-                    merger.write(tmp.name)
-                    merger.close()
-                    with open(tmp.name, "rb") as merged_pdf:
-                        st.download_button(
-                            "📥 Zusammengeführte PDF herunterladen",
-                            merged_pdf,
-                            "merged.pdf",
-                        )
+                buf = io.BytesIO()
+                merger.write(buf)
+                merger.close()
+                buf.seek(0)
+                st.download_button(
+                    "📥 Zusammengeführte PDF herunterladen",
+                    buf,
+                    file_name="merged.pdf",
+                    mime="application/pdf",
+                )
 
 # --- AUFTEILEN ---
 else:
     uploaded_file = st.file_uploader("Wähle eine PDF-Datei", type="pdf")
 
     if uploaded_file:
-        reader = PdfReader(uploaded_file)
-        total_pages = len(reader.pages)
-        st.info(f"Diese PDF hat {total_pages} Seiten.")
+        try:
+            reader = PdfReader(uploaded_file)
+        except Exception as e:
+            st.error(f"Kann die PDF nicht lesen: {e}")
+        else:
+            total_pages = len(reader.pages)
+            st.info(f"Diese PDF hat {total_pages} Seiten.")
 
-        page_selection = st.text_input(
-            "Welche Seiten extrahieren?",
-            placeholder="z. B. 1,3-5,7",
-            help="Kommagetrennt: einzelne Seiten (1,3) oder Bereiche (3-5).",
-        )
+            page_selection = st.text_input(
+                "Welche Seiten extrahieren?",
+                placeholder="z. B. 1,3-5,7",
+                help="Kommagetrennt: einzelne Seiten (1,3) oder Bereiche (3-5).",
+            )
 
-        if st.button("Aufteilen"):
-            if not page_selection:
-                st.warning("Bitte Seiten angeben.")
-            else:
-                pages_to_extract = []
-                for part in page_selection.split(","):
-                    if "-" in part:
-                        start, end = map(int, part.split("-"))
-                        pages_to_extract.extend(range(start, end + 1))
+            if st.button("Aufteilen"):
+                if not page_selection.strip():
+                    st.warning("Bitte Seiten angeben.")
+                else:
+                    pages_to_extract = []
+                    valid = True
+                    for part in page_selection.split(","):
+                        part = part.strip()
+                        if not part:
+                            continue
+                        if "-" in part:
+                            try:
+                                start_s, end_s = part.split("-", 1)
+                                start = int(start_s)
+                                end = int(end_s)
+                            except Exception:
+                                valid = False
+                                break
+                            if start > end:
+                                valid = False
+                                break
+                            pages_to_extract.extend(range(start, end + 1))
+                        else:
+                            try:
+                                pages_to_extract.append(int(part))
+                            except Exception:
+                                valid = False
+                                break
+
+                    # filter valid page numbers and convert to 0-based
+                    pages_to_extract = [p - 1 for p in pages_to_extract if 0 < p <= total_pages]
+
+                    if not valid or not pages_to_extract:
+                        st.error("Ungültige Seitenangabe oder Seiten ausserhalb des Bereichs.")
                     else:
-                        pages_to_extract.append(int(part))
-                pages_to_extract = [p - 1 for p in pages_to_extract if 0 < p <= total_pages]
+                        writer = PdfWriter()
+                        for p in pages_to_extract:
+                            writer.add_page(reader.pages[p])
 
-                writer = PdfWriter()
-                for p in pages_to_extract:
-                    writer.add_page(reader.pages[p])
-
-                with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp:
-                    writer.write(tmp)
-                    writer.close()
-                    with open(tmp.name, "rb") as split_pdf:
+                        buf = io.BytesIO()
+                        writer.write(buf)
+                        # PdfWriter hat keine close()-Methode in manchen Versionen. safe to just seek.
+                        buf.seek(0)
                         st.download_button(
                             "📥 Extrahierte Seiten herunterladen",
-                            split_pdf,
-                            "extracted_pages.pdf",
+                            buf,
+                            file_name="extracted_pages.pdf",
+                            mime="application/pdf",
                         )
