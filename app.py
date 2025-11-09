@@ -1,6 +1,7 @@
 import streamlit as st
 from pypdf import PdfReader, PdfWriter
 from pdf2image import convert_from_path
+from pdf2image import convert_from_bytes
 from streamlit_sortables import sort_items
 from PIL import Image
 import io
