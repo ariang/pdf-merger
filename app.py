@@ -85,15 +85,51 @@ if uploaded_files:
         st.success("PDF geteilt!")
         st.download_button("Download geteilte PDF", out_bytes.getvalue(), file_name="split.pdf")
 
-    st.subheader("PDF komprimieren")
-    compress_index = st.selectbox("PDF wählen zum Komprimieren", [p['name'] for p in pdfs], key="compress_pdf")
-    compress_pdf_bytes = next(p['bytes'] for p in pdfs if p['name'] == compress_index)
-    quality = st.slider("Qualität (JPEG)", 10, 100, 75)
-    if st.button("Komprimieren"):
-        original_size = get_pdf_size(compress_pdf_bytes)
-        compressed_bytes = compress_pdf(compress_pdf_bytes, quality)
-        compressed_size = get_pdf_size(compressed_bytes)
-        st.write(f"Original: {original_size:.2f} KB | Komprimiert: {compressed_size:.2f} KB")
-        images = pdf_to_images(compressed_bytes)
-        st.image(images[0], caption="Vorschau erste Seite", width=300)
-        st.download_button("Download komprimierte PDF", compressed_bytes, file_name="compressed.pdf")
+st.set_page_config(page_title="PDF-Toolkit", layout="wide")
+
+def get_pdf_size(pdf_bytes):
+    return len(pdf_bytes) / 1024  # KB
+
+def compress_pdf_bytes(pdf_bytes, compression_level=6):
+    # pikepdf komprimiert PDF ohne Konvertierung zu Bildern
+    buf = BytesIO()
+    try:
+        with pikepdf.open(BytesIO(pdf_bytes)) as pdf:
+            pdf.save(buf, compression=pikepdf.CompressionLevel(compression_level))
+    except Exception:
+        return pdf_bytes  # fallback, falls fehlerhaft
+    return buf.getvalue()
+
+uploaded_files = st.file_uploader("PDFs hochladen", type="pdf", accept_multiple_files=True)
+
+if uploaded_files:
+    pdfs = []
+    for f in uploaded_files:
+        pdf_bytes = f.read()
+        try:
+            reader = PdfReader(BytesIO(pdf_bytes))
+            pdfs.append({'name': f.name, 'bytes': pdf_bytes, 'reader': reader})
+        except Exception:
+            st.error(f"Die PDF '{f.name}' konnte nicht gelesen werden.")
+
+    if pdfs:
+        # Zusammenführen
+        if st.button("Alle PDFs zusammenführen"):
+            writer = PdfWriter()
+            for pdf in pdfs:
+                for page in pdf['reader'].pages:
+                    writer.add_page(page)
+            out_bytes = BytesIO()
+            writer.write(out_bytes)
+            st.download_button("Download Zusammengeführt", out_bytes.getvalue(), file_name="merged.pdf")
+
+        # Kompression
+        compress_index = st.selectbox("PDF wählen zum Komprimieren", [p['name'] for p in pdfs])
+        compress_pdf_bytes_data = next(p['bytes'] for p in pdfs if p['name'] == compress_index)
+        compression_level = st.slider("Kompressionsstufe", 1, 9, 6)
+        if st.button("Komprimieren"):
+            original_size = get_pdf_size(compress_pdf_bytes_data)
+            compressed_bytes = compress_pdf_bytes(compress_pdf_bytes_data, compression_level)
+            compressed_size = get_pdf_size(compressed_bytes)
+            st.write(f"Original: {original_size:.2f} KB | Komprimiert: {compressed_size:.2f} KB")
+            st.download_button("Download komprimierte PDF", compressed_bytes, file_name="compressed.pdf")
