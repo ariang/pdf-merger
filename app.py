@@ -32,7 +32,6 @@ st.markdown("Laden Sie ein PDF hoch, um Seiten visuell anzuordnen, zu drehen, zu
 
 # --- STATE MANAGEMENT INITIALISIEREN ---
 if 'pdf_pages' not in st.session_state:
-    # Speichert die Metadaten jeder Seite: Original-Index, Drehung, Aktiv-Status, Bild
     st.session_state.pdf_pages = []
 if 'current_file_id' not in st.session_state:
     st.session_state.current_file_id = None
@@ -43,32 +42,26 @@ if 'file_uploaded' not in st.session_state:
 uploaded_file = st.file_uploader("PDF hier ablegen", type="pdf")
 
 if uploaded_file:
-    # Prüfen, ob eine neue Datei hochgeladen wurde
     if uploaded_file.file_id != st.session_state.current_file_id:
         with st.spinner('PDF wird verarbeitet... Bitte warten.'):
             try:
-                # 1. PDF lesen für spätere Extraktion
                 pdf_reader = PdfReader(uploaded_file)
-                
-                # 2. Vorschau-Bilder generieren (benötigt Poppler!)
                 images = convert_from_bytes(uploaded_file.getvalue(), dpi=100)
                 
-                # 3. State initialisieren
                 st.session_state.pdf_pages = []
                 for i, img in enumerate(images):
                     st.session_state.pdf_pages.append({
-                        "orig_index": i,       # Verweis auf die Originalseite im PDF
-                        "thumb": img,          # Vorschaubild
-                        "rotation": 0,         # Aktuelle Drehung (0, 90, 180, 270)
-                        "is_active": True,     # Soll die Seite im End-PDF sein?
-                        "id": f"page_{i}"      # Eindeutige ID für Sortables
+                        "orig_index": i,
+                        "thumb": img,
+                        "rotation": 0,
+                        "is_active": True,
+                        "id": f"page_{i}"
                     })
                 
-                # Speichern der Rohdaten für den finalen Build
                 st.session_state.source_pdf_bytes = uploaded_file.getvalue()
                 st.session_state.current_file_id = uploaded_file.file_id
                 st.session_state.file_uploaded = True
-                st.rerun() # UI neu laden mit Daten
+                st.rerun()
             except Exception as e:
                 st.error(f"Fehler beim Verarbeiten der PDF. Ist 'Poppler' installiert?\nDetails: {e}")
                 st.session_state.file_uploaded = False
@@ -76,14 +69,12 @@ if uploaded_file:
 # --- HAUPTANSICHT (NUR WENN DATEI GELADEN) ---
 if st.session_state.file_uploaded and st.session_state.pdf_pages:
     
-    # Tabs für bessere Übersicht
     tab_edit, tab_sort, tab_export = st.tabs(["🛠️ Bearbeiten (Drehen/Löschen)", "🔃 Reihenfolge (Drag & Drop)", "📥 Exportieren"])
 
     # --- TAB 1: BEARBEITEN (GRID VIEW) ---
     with tab_edit:
         st.subheader("Seiten visuell bearbeiten")
         
-        # Grid-Layout erstellen (z.B. 4 Spalten)
         cols_per_row = 4
         all_pages = st.session_state.pdf_pages
         
@@ -104,7 +95,6 @@ if st.session_state.file_uploaded and st.session_state.pdf_pages:
                             
                             st.image(preview_img, use_container_width=True)
                             
-                            # Aktions-Buttons
                             c1, c2, c3 = st.columns(3)
                             if c1.button("↺", key=f"rotL_{page_data['orig_index']}", help="90° Links drehen"):
                                 page_data['rotation'] = (page_data['rotation'] - 90) % 360
@@ -131,7 +121,6 @@ if st.session_state.file_uploaded and st.session_state.pdf_pages:
             for p in active_pages_for_sort
         ]
         
-        # KORRIGIERTER AUFRUF: sort_items
         sorted_results = sort_items(sortable_items_list, key="page_sorter", multi_containers=True) 
         
         id_to_page = {p['id']: p for p in st.session_state.pdf_pages}
@@ -165,10 +154,14 @@ if st.session_state.file_uploaded and st.session_state.pdf_pages:
         st.divider()
         st.subheader("Optionen")
         
-        compress_pdf = st.checkbox(
-            "PDF verlustfrei komprimieren", 
-            value=True, 
-            help="Entfernt überflüssige Daten aus den Seitenströmen. Reduziert die Dateigröße, ohne die Qualität zu beeinträchtigen."
+        # NEU: Slider für das Komprimierungslevel
+        compression_level = st.slider(
+            "Verlustfreies Komprimierungslevel (Zlib)",
+            min_value=0, # 0 deaktiviert die Komprimierung
+            max_value=9, # 9 ist die stärkste Komprimierung (dauert länger)
+            value=6,     # Standardwert: Gutes Gleichgewicht zwischen Geschwindigkeit und Komprimierung
+            step=1,
+            help="Level 0 deaktiviert die Komprimierung. Level 1 ist am schnellsten, Level 9 komprimiert am besten. Dies ist eine verlustfreie Komprimierung (keine Qualitätsverluste)."
         )
         
         st.divider()
@@ -189,12 +182,12 @@ if st.session_state.file_uploaded and st.session_state.pdf_pages:
                             if page_data['rotation'] != 0:
                                 original_page.rotate(page_data['rotation'])
                             
-                            # KORRIGIERTE LOGIK: Seite zuerst hinzufügen, dann komprimieren
                             writer.add_page(original_page)
                             
-                            if compress_pdf:
-                                # Komprimierung auf die Seite im Writer aufrufen
-                                writer.pages[-1].compress_content_streams() 
+                            # NEU: Komprimierung anwenden, falls Level > 0
+                            if compression_level > 0:
+                                # Wir übergeben das Level direkt an die Funktion
+                                writer.pages[-1].compress_content_streams(level=compression_level) 
                     
                     output_pdf = io.BytesIO()
                     writer.write(output_pdf)
