@@ -33,44 +33,51 @@ if 'file_uploaded' not in st.session_state:
 if 'source_pdf_path' not in st.session_state:
     st.session_state.source_pdf_path = None
 
-# --- UPLOAD ---
+# --- DATEI UPLOAD ---
 uploaded_file = st.file_uploader("PDF hier ablegen", type="pdf")
 
 if uploaded_file:
-    if uploaded_file.name != st.session_state.current_file_id:
-        with st.spinner("PDF wird verarbeitet..."):
+    # NEU: Lese den Inhalt nur einmal in eine lokale Variable
+    pdf_bytes = uploaded_file.getvalue()
+    
+    if uploaded_file.file_id != st.session_state.current_file_id:
+        with st.spinner('PDF wird verarbeitet... Bitte warten.'):
             try:
-                # --- Temporäre Datei speichern ---
-                with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp_file:
-                    tmp_file.write(uploaded_file.read())
-                    tmp_path = tmp_file.name
-
-                # --- PdfReader ---
-                pdf_reader = PdfReader(tmp_path, strict=False)
-
-                # --- Vorschau mit pdf2image ---
-                images = convert_from_path(tmp_path, dpi=100)
-
-                # --- State initialisieren ---
+                # 1. PDF-Inhalt einmalig speichern
+                st.session_state.source_pdf_bytes = pdf_bytes
+                
+                # 2. PDF lesen für spätere Extraktion (verwende BytesIO für pypdf)
+                # ACHTUNG: Dies ist technisch gesehen nicht nötig, da st.session_state.source_pdf_bytes 
+                # später im Export-Tab gelesen wird. Lassen wir es für die Struktur.
+                # WICHTIGER ist die Konvertierung:
+                
+                # 3. Vorschau-Bilder generieren (verwende die lokale Variable)
+                # Der Aufruf convert_from_bytes liest den Stream, aber da wir Bytes übergeben, 
+                # ist es eine Kopie und der Fehler sollte behoben sein.
+                images = convert_from_bytes(pdf_bytes, dpi=100)
+                
+                # 4. State initialisieren
                 st.session_state.pdf_pages = []
                 for i, img in enumerate(images):
                     st.session_state.pdf_pages.append({
-                        "orig_index": i,
+                        "orig_index": i,      
                         "thumb": img,
                         "rotation": 0,
                         "is_active": True,
                         "id": f"page_{i}"
                     })
-
-                st.session_state.source_pdf_path = tmp_path
-                st.session_state.current_file_id = uploaded_file.name
+                
+                st.session_state.current_file_id = uploaded_file.file_id
                 st.session_state.file_uploaded = True
-                st.session_state.original_size = os.path.getsize(tmp_path)
-
-                st.experimental_rerun()
+                
+                # Speichern der Originalgröße
+                st.session_state.original_size = len(st.session_state.source_pdf_bytes)
+                st.rerun()
             except Exception as e:
-                st.error(f"Fehler beim Verarbeiten der PDF.\nDetails: {e}")
+                # ... (Fehlerbehandlung beibehalten)
+                st.error(f"Fehler beim Verarbeiten der PDF. Ist 'Poppler' installiert?\nDetails: {e}")
                 st.session_state.file_uploaded = False
+                st.session_state.current_file_id = None # Wichtig bei Fehler
 
 # --- HAUPTANSICHT ---
 if st.session_state.file_uploaded and st.session_state.pdf_pages:
