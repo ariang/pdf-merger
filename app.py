@@ -52,7 +52,7 @@ if uploaded_file:
                 # *2. Vorschau-Bilder generieren (Poppler)*
                 with st.spinner('Vorschaubilder werden generiert...'):
                     # Sollte nur laufen, wenn das PDF intakt ist
-                    images = convert_from_bytes(pdf_bytes, dpi=100)
+                    images = convert_from_bytes(pdf_bytes, dpi=100, poppler_path='poppler-24.02.0\Library\bin')
                 
                 # *3. State initialisieren (Restlicher Code)*
                 st.session_state.pdf_pages = []
