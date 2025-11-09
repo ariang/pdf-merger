@@ -2,7 +2,7 @@ import streamlit as st
 from pypdf import PdfReader, PdfWriter
 from pdf2image import convert_from_bytes
 # KORREKTUR: Die Funktion heißt 'sortable_items'
-from streamlit_sortables import sortable_items 
+from streamlit_sortables import sort_items
 from PIL import Image
 import io
 
@@ -142,7 +142,7 @@ if st.session_state.file_uploaded and st.session_state.pdf_pages:
         ]
         
         # KORREKTUR: Die Funktion heißt 'sortable_items'
-        sorted_results = sortable_items(sortable_items_list, key="page_sorter")
+        sorted_results = sort_items(sortable_items_list, key="page_sorter")
         
         # 1. Mapping von ID zu Page-Objekt erstellen
         id_to_page = {p['id']: p for p in st.session_state.pdf_pages}
