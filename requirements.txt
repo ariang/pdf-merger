@@ -3,4 +3,3 @@ pypdf
 pdf2image
 pillow
 streamlit-sortables
-python-poppler
