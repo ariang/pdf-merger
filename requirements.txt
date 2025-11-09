@@ -1,2 +1,5 @@
 streamlit
-PyPDF2
+pypdf
+pdf2image
+pillow
+streamlit-sortables
