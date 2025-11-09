@@ -1,8 +1,8 @@
 import streamlit as st
 from pypdf import PdfReader, PdfWriter
 from pdf2image import convert_from_bytes
-# KORREKTUR: Die Funktion heißt 'sortable_items' (mit 'able')
-from streamlit_sortables import sortable_items
+# KORREKTUR: Du hattest recht, es ist 'sort_items'
+from streamlit_sortables import sort_items 
 from PIL import Image
 import io
 
@@ -141,8 +141,9 @@ if st.session_state.file_uploaded and st.session_state.pdf_pages:
             for p in active_pages_for_sort
         ]
         
-        # KORREKTUR: Die Funktion heißt 'sortable_items'
-        sorted_results = sortable_items(sortable_items_list, key="page_sorter")
+        # KORREKTUR: Die Funktion heißt 'sort_items'
+        # (Parameter 'multi_containers' ist hier nicht nötig)
+        sorted_results = sort_items(sortable_items_list, key="page_sorter") 
         
         # 1. Mapping von ID zu Page-Objekt erstellen
         id_to_page = {p['id']: p for p in st.session_state.pdf_pages}
@@ -151,9 +152,12 @@ if st.session_state.file_uploaded and st.session_state.pdf_pages:
         new_ordered_pages = []
         
         # Zuerst die sortierten aktiven Seiten hinzufügen
-        for item in sorted_results:
-            new_ordered_pages.append(id_to_page[item['id']])
-            
+        if sorted_results: # Nur wenn das Widget Ergebnisse liefert
+            for item in sorted_results:
+                new_ordered_pages.append(id_to_page[item['id']])
+        else: # Fallback, falls das Widget leer ist (z.B. alle Seiten deaktiviert)
+            new_ordered_pages = active_pages_for_sort
+
         # Dann die inaktiven Seiten hinten anhängen (damit sie nicht verloren gehen)
         for p in st.session_state.pdf_pages:
             if not p['is_active']:
@@ -161,7 +165,10 @@ if st.session_state.file_uploaded and st.session_state.pdf_pages:
                  
         # Überprüfen, ob sich die Reihenfolge wirklich geändert hat, um Endlosschleifen zu vermeiden
         current_ids = [p['id'] for p in st.session_state.pdf_pages if p['is_active']]
-        new_sorted_ids = [item['id'] for item in sorted_results]
+        if sorted_results:
+            new_sorted_ids = [item['id'] for item in sorted_results]
+        else:
+            new_sorted_ids = []
         
         if current_ids != new_sorted_ids and sorted_results:
              st.session_state.pdf_pages = new_ordered_pages
