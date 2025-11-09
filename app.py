@@ -1,8 +1,8 @@
 import streamlit as st
 from pypdf import PdfReader, PdfWriter
 from pdf2image import convert_from_bytes
-# KORREKTUR: Die Funktion heißt 'sortable_items'
-from streamlit_sortables import sort_items
+# KORREKTUR: Die Funktion heißt 'sortable_items' (mit 'able')
+from streamlit_sortables import sortable_items
 from PIL import Image
 import io
 
@@ -28,7 +28,7 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 st.title("📎 PDF Pro Editor")
-st.markdown("Laden Sie ein PDF hoch, um Seiten visuell anzuordnen, zu drehen oder zu entfernen.")
+st.markdown("Laden Sie ein PDF hoch, um Seiten visuell anzuordnen, zu drehen, zu entfernen oder zu komprimieren.")
 
 # --- STATE MANAGEMENT INITIALISIEREN ---
 if 'pdf_pages' not in st.session_state:
@@ -142,7 +142,7 @@ if st.session_state.file_uploaded and st.session_state.pdf_pages:
         ]
         
         # KORREKTUR: Die Funktion heißt 'sortable_items'
-        sorted_results = sort_items(sortable_items_list, key="page_sorter",multi_containers=True)
+        sorted_results = sortable_items(sortable_items_list, key="page_sorter")
         
         # 1. Mapping von ID zu Page-Objekt erstellen
         id_to_page = {p['id']: p for p in st.session_state.pdf_pages}
@@ -175,6 +175,18 @@ if st.session_state.file_uploaded and st.session_state.pdf_pages:
         active_count = sum(1 for p in st.session_state.pdf_pages if p['is_active'])
         st.write(f"Ihr neues PDF wird **{active_count}** Seiten enthalten.")
         
+        st.divider()
+        st.subheader("Optionen")
+        
+        # NEUE FUNKTION: Komprimierungs-Checkbox
+        compress_pdf = st.checkbox(
+            "PDF verlustfrei komprimieren", 
+            value=True, 
+            help="Entfernt überflüssige Daten aus den Seitenströmen. Reduziert die Dateigröße, ohne die Qualität zu beeinträchtigen."
+        )
+        
+        st.divider()
+        
         if st.button("🚀 PDF Generieren & Herunterladen", type="primary", use_container_width=True):
             if active_count == 0:
                 st.error("Sie haben alle Seiten entfernt. Es gibt nichts zu generieren.")
@@ -193,6 +205,10 @@ if st.session_state.file_uploaded and st.session_state.pdf_pages:
                             # Drehung anwenden (falls nötig)
                             if page_data['rotation'] != 0:
                                 original_page.rotate(page_data['rotation'])
+                            
+                            # NEUE FUNKTION: Komprimierung anwenden
+                            if compress_pdf:
+                                original_page.compress_content_streams()
                             
                             writer.add_page(original_page)
                     
