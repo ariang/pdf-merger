@@ -1,4 +1,5 @@
 streamlit>=1.26
 pypdf>=3.20
+pikepdf>=8.0
 pdf2image>=1.16
 Pillow>=10.0
